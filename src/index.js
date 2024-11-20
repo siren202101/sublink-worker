@@ -1,8 +1,9 @@
 import { ConfigBuilder } from './SingboxConfigBuilder.js';
 import { generateHtml } from './htmlBuilder.js';
 import { ClashConfigBuilder } from './ClashConfigBuilder.js';
-import { encodeBase64, decodeBase64, GenerateWebPath } from './utils.js';
-import { PREDEFINED_RULE_SETS } from './config.js';
+import { encodeBase64, decodeBase64, GenerateWebPath, DeepCopy } from './utils.js';
+import { PREDEFINED_RULE_SETS, SING_BOX_CONFIG, CLASH_CONFIG } from './config.js';
+import yaml from 'js-yaml';
 
 addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request))
@@ -29,6 +30,7 @@ async function handleRequest(request) {
         ips: customRuleIPs[index].split(',').map(ip => ip.trim()),
         outbound: customRuleNames[index]
       }));
+      const pin = formData.get('pin');
 
       if (!inputString) {
         return new Response('Missing input parameter', { status: 400 });
@@ -38,8 +40,8 @@ async function handleRequest(request) {
       const rulesToUse = selectedRules.length > 0 ? selectedRules : ['广告拦截', '谷歌服务', '国外媒体', '电报消息'];
 
       const xrayUrl = `${url.origin}/xray?config=${encodeURIComponent(inputString)}`;
-      const singboxUrl = `${url.origin}/singbox?config=${encodeURIComponent(inputString)}&selectedRules=${encodeURIComponent(JSON.stringify(rulesToUse))}&customRules=${encodeURIComponent(JSON.stringify(customRules))}`;
-      const clashUrl = `${url.origin}/clash?config=${encodeURIComponent(inputString)}&selectedRules=${encodeURIComponent(JSON.stringify(rulesToUse))}&customRules=${encodeURIComponent(JSON.stringify(customRules))}`;
+      const singboxUrl = `${url.origin}/singbox?config=${encodeURIComponent(inputString)}&selectedRules=${encodeURIComponent(JSON.stringify(rulesToUse))}&customRules=${encodeURIComponent(JSON.stringify(customRules))}pin=${pin}`;
+      const clashUrl = `${url.origin}/clash?config=${encodeURIComponent(inputString)}&selectedRules=${encodeURIComponent(JSON.stringify(rulesToUse))}&customRules=${encodeURIComponent(JSON.stringify(customRules))}pin=${pin}`;
 
       return new Response(generateHtml(xrayUrl, singboxUrl, clashUrl), {
         headers: { 'Content-Type': 'text/html' }
@@ -48,8 +50,7 @@ async function handleRequest(request) {
       const inputString = url.searchParams.get('config');
       let selectedRules = url.searchParams.get('selectedRules');
       let customRules = url.searchParams.get('customRules');
-
-      console.log(customRules);
+      let pin = url.searchParams.get('pin');
 
       if (!inputString) {
         return new Response('Missing config parameter', { status: 400 });
@@ -75,11 +76,22 @@ async function handleRequest(request) {
         customRules = [];
       }
 
+      // Modify the existing conversion logic
+      const configId = url.searchParams.get('configId');
+      let baseConfig;
+      if (configId) {
+        const customConfig = await SUBLINK_KV.get(configId);
+        if (customConfig) {
+          baseConfig = JSON.parse(customConfig);
+        } 
+      }
+
+      // Env pin is use to pin customRules to top
       let configBuilder;
       if (url.pathname.startsWith('/singbox')) {
-        configBuilder = new ConfigBuilder(inputString, selectedRules, customRules);
+        configBuilder = new ConfigBuilder(inputString, selectedRules, customRules, pin, baseConfig);
       } else {
-        configBuilder = new ClashConfigBuilder(inputString, selectedRules, customRules);
+        configBuilder = new ClashConfigBuilder(inputString, selectedRules, customRules, pin, baseConfig);
       }
 
       const config = await configBuilder.build();
@@ -117,7 +129,7 @@ async function handleRequest(request) {
         return new Response('Missing URL parameter', { status: 400 });
       }
       
-      // 创建一个 URL 对象来正确解析原始 URL
+      // Create a URL object to correctly parse the original URL
       const parsedUrl = new URL(originalUrl);
       const queryString = parsedUrl.search;
       
@@ -126,8 +138,6 @@ async function handleRequest(request) {
       }
 
       await SUBLINK_KV.put(shortCode, queryString);
-      
-      console.log(JSON.stringify(shortCode));
       
       return new Response(shortCode, {
         headers: { 'Content-Type': 'text/plain' }
@@ -155,8 +165,6 @@ async function handleRequest(request) {
         originalUrl = `${url.origin}/xray${originalParam}`;
       }
 
-      console.log(originalUrl);
-
       if (originalUrl === null) {
         return new Response('Short URL not found', { status: 404 });
       }
@@ -170,7 +178,6 @@ async function handleRequest(request) {
       const finalProxyList = [];
 
       for (const proxy of proxylist) {
-        console.log(proxy);
         if (proxy.startsWith('http://') || proxy.startsWith('https://')) {
           try {
             const response = await fetch(proxy)
@@ -201,6 +208,46 @@ async function handleRequest(request) {
       });
     } else if (url.pathname === '/favicon.ico') {
       return Response.redirect('https://cravatar.cn/avatar/9240d78bbea4cf05fb04f2b86f22b18d?s=160&d=retro&r=g', 301)
+    } else if (url.pathname === '/config') {
+      const { type, content } = await request.json();
+      const configId = `${type}_${GenerateWebPath(8)}`;
+      
+      try {
+        let configString;
+        if (type === 'clash') {
+          // 如果是 YAML 格式，先转换为 JSON
+          if (typeof content === 'string' && (content.trim().startsWith('-') || content.includes(':'))) {
+            const yamlConfig = yaml.load(content);
+            configString = JSON.stringify(yamlConfig);
+          } else {
+            configString = typeof content === 'object' 
+              ? JSON.stringify(content)
+              : content;
+          }
+        } else {
+          // singbox 配置处理
+          configString = typeof content === 'object' 
+            ? JSON.stringify(content)
+            : content;
+        }
+
+        // 验证 JSON 格式
+        JSON.parse(configString);
+        
+        await SUBLINK_KV.put(configId, configString, { 
+          expirationTtl: 60 * 60 * 24 * 30  // 30 days
+        });
+        
+        return new Response(configId, {
+          headers: { 'Content-Type': 'text/plain' }
+        });
+      } catch (error) {
+        console.error('Config validation error:', error);
+        return new Response('Invalid format: ' + error.message, {
+          status: 400,
+          headers: { 'Content-Type': 'text/plain' }
+        });
+      }
     }
 
     return new Response('Not Found', { status: 404 });

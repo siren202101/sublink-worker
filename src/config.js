@@ -151,7 +151,7 @@ export function getOutbounds(selectedRuleNames) {
 }
 
 // Helper function to generate rules based on selected rule names
-export function generateRules(selectedRules = [], customRules = []) {
+export function generateRules(selectedRules = [], customRules = [], pin) {
 	if (typeof selectedRules === 'string' && PREDEFINED_RULE_SETS[selectedRules]) {
 	  selectedRules = PREDEFINED_RULE_SETS[selectedRules];
 	}
@@ -174,16 +174,30 @@ export function generateRules(selectedRules = [], customRules = []) {
 	  }
 	});
   
-	if (customRules.length > 0) {
+	if (customRules && customRules.length > 0 && pin !== "true") {
 		customRules.forEach((rule) => {
 		  rules.push({
 			site_rules: rule.site.split(','),
 			ip_rules: rule.ip.split(','),
 			domain_suffix: rule.domain_suffix ? rule.domain_suffix.split(',') : [],
+			domain_keyword: rule.domain_keyword ? rule.domain_keyword.split(',') : [],
 			ip_cidr: rule.ip_cidr ? rule.ip_cidr.split(',') : [],
 			outbound: rule.name
 		  });
 		});
+	}
+	else if (customRules && customRules.length > 0 && pin === "true") {
+		customRules.reverse();
+		customRules.forEach((rule) => {
+			rules.unshift({
+			  site_rules: rule.site.split(','),
+			  ip_rules: rule.ip.split(','),
+			  domain_suffix: rule.domain_suffix ? rule.domain_suffix.split(',') : [],
+			  domain_keyword: rule.domain_keyword ? rule.domain_keyword.split(',') : [],
+			  ip_cidr: rule.ip_cidr ? rule.ip_cidr.split(',') : [],
+			  outbound: rule.name
+			});
+		  });
 	}
   
 	return rules;
@@ -231,30 +245,32 @@ export function generateRuleSets(selectedRules = [], customRules = []) {
     download_detour: '⚡ 自动选择'
   }));
 
-  customRules.forEach(rule => {
-	if(rule.site!=''){
-		rule.site.split(',').forEach(site => {
-			site_rule_sets.push({
-				tag: site.trim(),
-				type: 'remote',
-				format: 'binary',
-				url: `${SITE_RULE_SET_BASE_URL}geosite-${site.trim()}.srs`,
-				download_detour: '⚡ 自动选择'
+  if(customRules){
+	customRules.forEach(rule => {
+		if(rule.site!=''){
+			rule.site.split(',').forEach(site => {
+				site_rule_sets.push({
+					tag: site.trim(),
+					type: 'remote',
+					format: 'binary',
+					url: `${SITE_RULE_SET_BASE_URL}geosite-${site.trim()}.srs`,
+					download_detour: '⚡ 自动选择'
+				});
 			});
-		});
-	}
-	if(rule.ip!=''){
-		rule.ip.split(',').forEach(ip => {
-			ip_rule_sets.push({
-				tag: `${ip.trim()}-ip`,
-				type: 'remote',
-				format: 'binary',
-				url: `${IP_RULE_SET_BASE_URL}geoip-${ip.trim()}.srs`,
-				download_detour: '⚡ 自动选择'
+		}
+		if(rule.ip!=''){
+			rule.ip.split(',').forEach(ip => {
+				ip_rule_sets.push({
+					tag: `${ip.trim()}-ip`,
+					type: 'remote',
+					format: 'binary',
+					url: `${IP_RULE_SET_BASE_URL}geoip-${ip.trim()}.srs`,
+					download_detour: '⚡ 自动选择'
+				});
 			});
-		});
+		}
+	});
 	}
-  });
 
   ruleSets.push(...site_rule_sets, ...ip_rule_sets);
 
@@ -263,18 +279,13 @@ export function generateRuleSets(selectedRules = [], customRules = []) {
 
 // Singbox configuration
 export const SING_BOX_CONFIG = {
-	log: {
-		disabled: false,
-		level: 'info',
-		timestamp: true,
-	},
 	dns: {
 		servers: [
 			{ tag: 'dns_proxy', address: 'tls://1.1.1.1', address_resolver: 'dns_resolver' },
 			{ tag: 'dns_direct', address: 'h3://dns.alidns.com/dns-query', address_resolver: 'dns_resolver', detour: 'DIRECT' },
 			{ tag: 'dns_fakeip', address: 'fakeip' },
 			{ tag: 'dns_resolver', address: '223.5.5.5', detour: 'DIRECT' },
-			{ tag: 'block', address: 'rcode://success' }
+			{ tag: 'dns_block', address: 'rcode://success' }
 		],
 		rules: [
 			{ outbound: ['any'], server: 'dns_resolver' },
@@ -327,8 +338,27 @@ export const CLASH_CONFIG = {
 	'log-level': 'info',
 	dns: {
 		enable: true,
-		nameserver: ['119.29.29.29', '223.5.5.5'],
-		fallback: ['8.8.8.8', '8.8.4.4', 'tls://1.0.0.1:853', 'tls://dns.google:853'],
+		ipv6: true,
+		'respect-rules': true,
+		'enhanced-mode': 'fake-ip',
+		nameserver: [
+			'https://120.53.53.53/dns-query',
+			'https://223.5.5.5/dns-query'
+		],
+		'proxy-server-nameserver': [
+			'https://120.53.53.53/dns-query',
+			'https://223.5.5.5/dns-query'
+		],
+		'nameserver-policy': {
+			'geosite:cn,private': [
+				'https://120.53.53.53/dns-query',
+				'https://223.5.5.5/dns-query'
+			],
+			'geosite:geolocation-!cn': [
+				'https://dns.cloudflare.com/dns-query',
+				'https://dns.google/dns-query'
+			]
+		}
 	},
 	proxies: [],
 	'proxy-groups': [],

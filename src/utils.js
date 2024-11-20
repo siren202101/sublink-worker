@@ -1,7 +1,9 @@
 const PATH_LENGTH = 7;
 
 export function decodeBase64(str) {
-	return atob(str);
+	const binString = atob(str);
+	const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0));
+	return new TextDecoder().decode(bytes);
 }
 export function encodeBase64(str) {
 	return btoa(str);
@@ -23,10 +25,10 @@ export function DeepCopy(obj) {
 	return newObj;
 }
 
-export function GenerateWebPath() {
+export function GenerateWebPath(length = PATH_LENGTH) {
 	const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 	let result = ''
-	for (let i = 0; i < PATH_LENGTH; i++) {
+	for (let i = 0; i < length; i++) {
 		result += characters.charAt(Math.floor(Math.random() * characters.length))
 	}
 	return result

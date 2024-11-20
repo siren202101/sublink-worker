@@ -1,8 +1,21 @@
-# Sublink Worker
+<div align="center">
+  <h1>
+    <b>Sublink Worker</b>
+  </h1>
+</div>
 
-Sublink Worker 是一个可部署在 Cloudflare Worker 上，小而美的订阅转换工具。可以将各种代理协议的分享 URL 转换为不同客户端可用的订阅链接。同时还提供灵活的自定义规则与API支持。
 
-演示站点：[https://sublink-worker.seven7-ade.workers.dev/](https://sublink-worker.seven7-ade.workers.dev/)
+<div align="center">
+  <h5>
+    <i>Serverless 自部署订阅转换工具最佳实践</i>
+  </h5>
+</div>
+
+<div align="center">
+  <href>
+    https://sublink-worker.sageer.me
+  </href>
+</div>
 
 ## 功能特点
 
@@ -20,15 +33,27 @@ Sublink Worker 是一个可部署在 Cloudflare Worker 上，小而美的订阅�
   - 提供多种预定义规则集
   - 可自建关于geo-site, geo-ip, ip-cidr和domain-suffix的自定义策略组
 
-## 快速部署
+## 部署
+
+### （推荐）自动部署
 
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/siren202101/sublink-worker)
 
-> 注意：9月2日之后，短连接服务由 R2 迁移到 KV，请确保API令牌有对应权限
+### 手动部署
+
+- 克隆项目仓库：`git clone https://github.com/7Sageer/sublink-worker.git`
+- 安装依赖：`npm install`
+- 配置 Cloudflare 账户凭证
+- 使用 Wrangler 部署：`wrangler deploy`
+
+
+## 常见问题
+
+如果您在使用过程中遇到任何问题，请查看 [FAQ文档](/docs/FAQ.md)。
 
 ## API 文档
 
-详细的 API 文档可以在 [API-doc.md](/doc/API-doc.md) 中找到。
+详细的 API 文档可以在 [API-doc.md](/docs/API-doc.md) 中找到。
 
 主要端点包括：
 
@@ -39,11 +64,10 @@ Sublink Worker 是一个可部署在 Cloudflare Worker 上，小而美的订阅�
 
 ## 最近更新
 
-- 2024-09-15
-  - [#31](https://github.com/7Sageer/sublink-worker/issues/31),[#25](https://github.com/7Sageer/sublink-worker/issues/25) 现在可以自定义短链接路径
-  - 优化了前端显示，简化操作流程
+- 2024-11-19
+  - 改进了整体UI交互体验，提升了操作流畅度
 
-[查看更新日志](/doc/update-log.md)
+[查看更新日志](/docs/update-log.md)
 
 ## 项目结构
 
@@ -56,7 +80,11 @@ Sublink Worker 是一个可部署在 Cloudflare Worker 上，小而美的订阅�
 ├── ProxyParsers.js          # 解析各种代理协议的 URL
 ├── utils.js                 # 提供各种实用函数
 ├── htmlBuilder.js           # 生成 Web 界面的 HTML
-└── config.js                # 保存配置信息
+├── config.js                # 保存配置信息
+└── docs/
+    ├── API-doc.md           # API 文档
+    ├── update-log.md        # 更新日志
+    └── FAQ.md               # 常见问题解答
 ```
 
 ## 贡献
